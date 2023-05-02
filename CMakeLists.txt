@@ -151,6 +151,8 @@ endif()
 
 include(config/hypre.cmake)
 
+include(config/ginkgo.cmake)
+
 ###############################################################################
 # Build Nek5000 dependencies                                                  #
 ###############################################################################
@@ -244,6 +246,8 @@ set_property(
 add_library(nekrs-lib SHARED ${SRC})
 
 add_dependencies(nekrs-lib HYPRE_BUILD)
+# add_dependencies(nekrs-lib GINKGO_BUILD)
+target_link_libraries(nekrs-lib PUBLIC Ginkgo::ginkgo)
 set_target_properties(nekrs-lib PROPERTIES LINKER_LANGUAGE CXX OUTPUT_NAME nekrs)
 target_link_libraries(nekrs-lib PUBLIC libocca OpenMP::OpenMP_CXX PRIVATE gs ${GSLIB})
 
@@ -281,6 +285,7 @@ target_include_directories(nekrs-lib
   PRIVATE
   ${ELLIPTIC_SOURCE_DIR}/amgSolver/hypre
   ${ELLIPTIC_SOURCE_DIR}/amgSolver/amgx
+  ${ELLIPTIC_SOURCE_DIR}/amgSolver/ginkgo
   ${PARALMOND_SOURCE_DIR}
   ${HYPRE_INCLUDE_DIR}
 )

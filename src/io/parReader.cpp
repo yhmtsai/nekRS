@@ -544,6 +544,7 @@ void parseCoarseSolver(const int rank, setupAide &options, inipp::Ini *par, std:
   const std::vector<std::string> validValues = {
       {"boomeramg"},
       {"amgx"},
+      {"ginkgo"},
       {"fp32"},
       {"fp64"},
       {"cpu"},
@@ -578,6 +579,13 @@ void parseCoarseSolver(const int rank, setupAide &options, inipp::Ini *par, std:
     options.setArgs(parSectionName + "SEMFEM SOLVER", options.getArgs("AMG SOLVER"));
     options.setArgs("AMG SOLVER PRECISION", "FP32");
     options.setArgs(parSectionName + "SEMFEM SOLVER PRECISION", "FP32");
+    options.setArgs("AMG SOLVER LOCATION", "GPU");
+  }
+  else if (p_coarseSolver.find("ginkgo") != std::string::npos) {
+    options.setArgs("AMG SOLVER", "GINKGO");
+    options.setArgs(parSectionName + "SEMFEM SOLVER", options.getArgs("AMG SOLVER"));
+    options.setArgs("AMG SOLVER PRECISION", "FP64");
+    options.setArgs(parSectionName + "SEMFEM SOLVER PRECISION", "FP64");
     options.setArgs("AMG SOLVER LOCATION", "GPU");
   }
 

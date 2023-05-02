@@ -34,6 +34,7 @@ SOFTWARE.
 #include "limits.h"
 #include "boomerAMG.h"
 #include "amgx.h"
+#include "ginkgo_elliptic.hpp"
 #include "platform.hpp"
 
 namespace {
@@ -122,8 +123,8 @@ void coarseSolver::setup(
     options.getArgs("BOOMERAMG SMOOTHER SWEEPS", settings[7]);
     options.getArgs("BOOMERAMG ITERATIONS", settings[3]);
     options.getArgs("BOOMERAMG STRONG THRESHOLD", settings[8]);
-    options.getArgs("BOOMERAMG NONGALERKIN TOLERANCE" , settings[9]);
-    options.getArgs("BOOMERAMG AGGRESSIVE COARSENING LEVELS" , settings[10]);
+    options.getArgs("BOOMERAMG NONGALERKIN TOLERANCE", settings[9]);
+    options.getArgs("BOOMERAMG AGGRESSIVE COARSENING LEVELS", settings[10]);
 
     boomerAMGSetup(Nrows,
                    nnz,
@@ -178,6 +179,22 @@ void coarseSolver::setup(
       o_rhsBuffer = platform->device.malloc(N * sizeof(float));
       o_xBuffer = platform->device.malloc(N * sizeof(float));
     }
+  } else if (options.compareArgs("AMG SOLVER", "GINKGO")) {
+    const int useFP32 = options.compareArgs("AMG SOLVER PRECISION", "FP32");
+    if (platform->device.mode() != "CUDA") {
+      if (platform->comm.mpiRank == 0)
+        printf("Ginkgo only supports CUDA!\n");
+      MPI_Barrier(platform->comm.mpiComm);
+      ABORT(1);
+    }
+    if (options.compareArgs("AMG SOLVER LOCATION", "CPU")) {
+      if (platform->comm.mpiRank == 0)
+        printf("Ginkgo only supports GPU!\n");
+      MPI_Barrier(platform->comm.mpiComm);
+      ABORT(1);
+    }
+    GinkgoSolver_setup(Nrows, nnz, Ai, Aj, Avals, (int)nullSpace, comm, platform->device.id());
+    N = (int)Nrows;
   } else {
     if(platform->comm.mpiRank == 0){
       std::string amgSolver;
@@ -425,7 +442,8 @@ void coarseSolver::solve(occa::memory o_rhs, occa::memory o_x) {
     semfemSolver(o_rhs, o_x);
   }
   else {
-    const bool useDevice = options.compareArgs("AMG SOLVER", "AMGX");
+    const bool useDevice =
+        options.compareArgs("AMG SOLVER", "AMGX") || options.compareArgs("AMG SOLVER", "GINKGO");
     if (gatherLevel) {
       //weight
       vectorDotStar(ogs->N, 1.0, ogs->o_invDegree, o_rhs, 0.0, o_Sx);
@@ -442,6 +460,10 @@ void coarseSolver::solve(occa::memory o_rhs, occa::memory o_x) {
     } else if (options.compareArgs("AMG SOLVER", "AMGX")){
       occa::memory o_b = gatherLevel ? o_Gx : o_rhs;
       AmgXSolve(o_b, o_x);
+    } else if (options.compareArgs("AMG SOLVER", "GINKGO")) {
+      occa::memory o_b = gatherLevel ? o_Gx : o_rhs;
+      // FP64 get ptr first
+      GinkgoSolver_solve(o_x.ptr(), o_b.ptr());
     } else {
       //gather the full vector
       MPI_Allgatherv(rhsLocal,             N,                MPI_DFLOAT,

@@ -2,6 +2,7 @@
 #include "platform.hpp"
 #include "gslib.h"
 #include "boomerAMG.h"
+#include "ginkgo_elliptic.hpp"
 #include "elliptic.h"
 #include "ellipticBuildSEMFEM.hpp"
 #include "amgx.h"
@@ -140,6 +141,23 @@ void ellipticSEMFEMSetup(elliptic_t* elliptic)
       std::stoi(getenv("NEKRS_GPU_MPI")),
       cfg);
   }
+  else if (elliptic->options.compareArgs("SEMFEM SOLVER", "GINKGO")) {
+    if (platform->device.mode() != "CUDA") {
+      if (platform->comm.mpiRank == 0)
+        printf("GINKGO only supports CUDA currently!\n");
+      MPI_Barrier(platform->comm.mpiComm);
+      ABORT(1);
+    }
+    GinkgoSolver_setup(numRows,
+                       data->nnz,
+                       data->Ai,
+                       data->Aj,
+                       data->Av,
+                       (int)elliptic->allNeumann,
+                       platform->comm.mpiComm,
+                       platform->device.id());
+    setupRetVal = 0;
+  }
   else {
     if(platform->comm.mpiRank == 0){
       std::string amgSolver;
@@ -184,6 +202,10 @@ void ellipticSEMFEMSolve(elliptic_t* elliptic, occa::memory& o_r, occa::memory& 
     }
   } else {
     AMGXsolve(o_buffer2.ptr(), o_buffer.ptr());
+  } else {
+    // Not sure the vector type
+    // UseFP64
+    GinkgoSolver_solve(o_buffer2.ptr(), o_buffer.ptr());
   }
 
   scatterKernel(

@@ -13,6 +13,7 @@
 #include "linAlg.hpp"
 #include "cfl.hpp"
 #include "amgx.h"
+#include "ginkgo_elliptic.hpp"
 
 // extern variable from nrssys.hpp
 platform_t* platform;
@@ -359,6 +360,7 @@ void finalize(void)
 {
   if(options.compareArgs("BUILD ONLY", "FALSE")) {
     AMGXfree();
+    GinkgoSolver_free();
     nek::end();
   }
 }
