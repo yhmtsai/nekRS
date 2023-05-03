@@ -94,11 +94,11 @@ template <typename ValueType> void GinkgoSolver_solve(ValueType *x, ValueType *r
   auto par_x = gko::experimental::distributed::Vector<ValueType>::create(exec,
                                                                          dup_comm,
                                                                          gko::dim<2>{num_global_rows, 1},
-                                                                         gko::give(dense_x).get());
+                                                                         gko::give(dense_x));
   auto par_rhs = gko::experimental::distributed::Vector<ValueType>::create(exec,
                                                                            dup_comm,
                                                                            gko::dim<2>{num_global_rows, 1},
-                                                                           gko::give(dense_rhs).get());
+                                                                           gko::give(dense_rhs));
   solver->apply(par_rhs.get(), par_x.get());
 }
 

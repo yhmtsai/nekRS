@@ -200,7 +200,7 @@ void ellipticSEMFEMSolve(elliptic_t* elliptic, occa::memory& o_r, occa::memory& 
     } else {
       boomerAMGSolve(o_buffer2.ptr(), o_buffer.ptr());
     }
-  } else {
+  } else if(elliptic->options.compareArgs("SEMFEM SOLVER", "AMGX")){
     AMGXsolve(o_buffer2.ptr(), o_buffer.ptr());
   } else {
     // Not sure the vector type
