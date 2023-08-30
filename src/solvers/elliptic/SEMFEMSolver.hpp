@@ -33,6 +33,7 @@ SOFTWARE.
 #include "hypreWrapper.hpp"
 #include "hypreWrapperDevice.hpp"
 #include "AMGX.hpp"
+#include "ginkgoWrapper.hpp"
 
 class SEMFEMSolver_t {
 
@@ -51,6 +52,7 @@ private:
   void *SEMFEMBuffer2_h_d;
   void *boomerAMG = nullptr;
   AMGX_t *AMGX = nullptr;
+  ginkgoWrapper *ginkgo = nullptr;
 
   elliptic_t *elliptic;
 

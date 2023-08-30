@@ -38,6 +38,7 @@ SOFTWARE.
 #include "hypreWrapper.hpp"
 #include "hypreWrapperDevice.hpp"
 #include "AMGX.hpp"
+#include "ginkgoWrapper.hpp"
 
 class MGSolver_t {
 
@@ -100,7 +101,7 @@ public:
  
     void *boomerAMG = nullptr;
     AMGX_t *AMGX = nullptr;
-  
+    ginkgoWrapper *ginkgo = nullptr;
   };
 
 

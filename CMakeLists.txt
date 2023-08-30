@@ -135,6 +135,7 @@ set(ENABLE_OPENCL OFF CACHE BOOL "Enable OCCA OpenCL support")
 set(ENABLE_METAL OFF CACHE BOOL "Enable OCCA Metal support")
 
 set(ENABLE_AMGX OFF CACHE BOOL "Enable NVIDIA AMGX support")
+set(ENABLE_GINKGO ON CACHE BOOL "Enable GINKGO support")
 set(ENABLE_HYPRE_GPU OFF CACHE BOOL "Enable HYPRE GPU support")
 set(NEKRS_GPU_MPI ON CACHE BOOL "Enable GPU aware MPI")
 set(ENABLE_CVODE OFF CACHE BOOL "Enable CVODE support")
@@ -209,6 +210,10 @@ endif()
 # hypre
 include(config/hypre.cmake)
 
+# ginkgo
+if(ENABLE_GINKGO)
+  include(config/ginkgo.cmake)
+endif()
 # external plugins
 file(GLOB plugins LIST_DIRECTORIES true ${CMAKE_CURRENT_SOURCE_DIR}/3rd_party/plugins/*)
 set(PLUGINS_RPATH "")
@@ -283,6 +288,11 @@ if(ENABLE_AMGX AND OCCA_CUDA_ENABLED)
   target_compile_definitions(nekrs-lib PUBLIC -DENABLE_AMGX)
   target_link_libraries(nekrs-lib PUBLIC amgxsh amgx)
   target_include_directories(nekrs-lib PUBLIC 3rd_party/AMGX/base/include 3rd_party/AMGX/core/include)
+endif()
+
+if(ENABLE_GINKGO)
+  target_compile_definitions(nekrs-lib PUBLIC -DENABLE_GINKGO)
+  target_link_libraries(nekrs-lib PUBLIC Ginkgo::ginkgo)
 endif()
 
 if (ENABLE_CVODE)

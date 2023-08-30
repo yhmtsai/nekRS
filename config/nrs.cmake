@@ -126,6 +126,7 @@ target_include_directories(nekrs-lib
   PRIVATE
   ${ELLIPTIC_SOURCE_DIR}/amgSolver/hypre
   ${ELLIPTIC_SOURCE_DIR}/amgSolver/amgx
+  ${ELLIPTIC_SOURCE_DIR}/amgSolver/ginkgo
   ${ELLIPTIC_SOURCE_DIR}/MG
 )
 

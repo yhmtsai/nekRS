@@ -18,6 +18,7 @@
 #include "AMGX.hpp"
 #include "hypreWrapper.hpp"
 #include "hypreWrapperDevice.hpp"
+#include "ginkgoWrapper.hpp"
 
 namespace fs = std::filesystem;
 

@@ -18,6 +18,7 @@
 #include "hypreWrapperDevice.hpp"
 
 #include "AMGX.hpp"
+#include "ginkgoWrapper.hpp"
 
 namespace {
 static std::ostringstream errorLogger;
@@ -712,6 +713,7 @@ void parseCoarseSolver(const int rank, setupAide &options, inipp::Ini *par, std:
       {"smoother"},
       {"boomeramg"},
       {"amgx"},
+      {"ginkgo"},
       {"cpu"},
       {"device"},
       {"overlap"},
@@ -725,7 +727,8 @@ void parseCoarseSolver(const int rank, setupAide &options, inipp::Ini *par, std:
   const int smoother = p_coarseSolver.find("smoother") != std::string::npos;
   const int amgx = p_coarseSolver.find("amgx") != std::string::npos;
   const int boomer = p_coarseSolver.find("boomeramg") != std::string::npos;
-  if (amgx + boomer > 1)
+  const int ginkgo = p_coarseSolver.find("ginkgo") != std::string::npos;
+  if (amgx + boomer + ginkgo > 1)
     append_error("Conflicting solver types in coarseSolver!\n");
 
   if (boomer) {
@@ -736,13 +739,17 @@ void parseCoarseSolver(const int rank, setupAide &options, inipp::Ini *par, std:
     }
   }
 
-  if (boomer || amgx) {
+  if (boomer || amgx || ginkgo) {
     options.setArgs(parSectionName + "MULTIGRID COARSE SOLVE", "TRUE");
     options.setArgs(parSectionName + "COARSE SOLVER", "BOOMERAMG");
     if (amgx) {
       options.setArgs(parSectionName + "COARSE SOLVER", "AMGX");
       if (!AMGXenabled())
         append_error("AMGX was requested but is not enabled!\n");
+    } else if(ginkgo) {
+      options.setArgs(parSectionName + "COARSE SOLVER", "GINKGO");
+      if (!ginkgoWrapperenabled())
+        append_error("Ginkgo was requested but is not enabled!\n");
     }
 
     options.setArgs(parSectionName + "COARSE SOLVER PRECISION", "FP32");

@@ -145,6 +145,23 @@ SEMFEMSolver_t::SEMFEMSolver_t(elliptic_t* elliptic_)
       useFP32,
       std::stoi(getenv("NEKRS_GPU_MPI")),
       cfg);
+  } else if (elliptic->options.compareArgs("COARSE SOLVER", "GINKGO")) {
+    nrsCheck(platform->device.mode() != "CUDA", platform->comm.mpiComm, EXIT_FAILURE,
+             "%s\n", "Ginkgo only supports CUDA currently!");
+    std::string configFile;
+    elliptic->options.getArgs("GINKGO CONFIG FILE", configFile);
+    ginkgo = new ginkgoWrapper(
+      numRows,
+      matrix->nnz,
+      matrix->Ai,
+      matrix->Aj,
+      matrix->Av,
+      (int) elliptic->allNeumann,
+      platform->comm.mpiComm,
+      platform->device.id(),
+      useFP32,
+      std::stoi(getenv("NEKRS_GPU_MPI")),
+      configFile);
   }
   else {
     std::string amgSolver;
@@ -167,6 +184,7 @@ SEMFEMSolver_t::~SEMFEMSolver_t()
       delete (hypreWrapper::boomerAMG_t*) this->boomerAMG;
   }
   if(AMGX) delete AMGX;
+  if(ginkgo) delete ginkgo; // shared_ptr?
 
   o_dofMap.free();
   o_SEMFEMBuffer1.free();
@@ -209,6 +227,10 @@ void SEMFEMSolver_t::run(occa::memory& o_r, occa::memory& o_z)
   } else if(elliptic->options.compareArgs("COARSE SOLVER", "AMGX") && useDevice){
 
     AMGX->solve(o_bufr.ptr(), o_bufz.ptr());
+
+  } else if(elliptic->options.compareArgs("COARSE SOLVER", "GINKGO") && useDevice){
+
+    ginkgo->solve(o_bufr.ptr(), o_bufz.ptr());
 
   } else {
 

@@ -30,6 +30,7 @@ SOFTWARE.
 #include "timer.hpp"
 
 #include "AMGX.hpp"
+#include "ginkgoWrapper.hpp"
 
 #include "platform.hpp"
 #include "linAlg.hpp"
@@ -149,6 +150,23 @@ void MGSolver_t::coarseLevel_t::setupSolver(
       useFP32,
       std::stoi(getenv("NEKRS_GPU_MPI")),
       cfg);
+  } else if (options.compareArgs("COARSE SOLVER", "GINKGO")) {
+    nrsCheck(platform->device.mode() != "CUDA", platform->comm.mpiComm, EXIT_FAILURE,
+             "%s\n", "Ginkgo only supports CUDA currently!");
+    std::string configFile;
+    options.getArgs("GINKGO CONFIG FILE", configFile);
+    ginkgo = new ginkgoWrapper(
+      N,
+      nnz,
+      Ai,
+      Aj,
+      Avals,
+      (int) nullSpace,
+      comm,
+      platform->device.id(),
+      useFP32,
+      std::stoi(getenv("NEKRS_GPU_MPI")),
+      configFile);
   } else {
     std::string amgSolver;
     options.getArgs("COARSE SOLVER", amgSolver);
@@ -170,6 +188,7 @@ MGSolver_t::coarseLevel_t::~coarseLevel_t()
       delete (hypreWrapper::boomerAMG_t*) this->boomerAMG;
   }
   if(AMGX) delete AMGX;
+  if(ginkgo) delete ginkgo;
 
   h_xBuffer.free();
   o_xBuffer.free();
@@ -206,6 +225,8 @@ void MGSolver_t::coarseLevel_t::solve(occa::memory& o_rhs, occa::memory& o_x)
       }
     } else if (options.compareArgs("COARSE SOLVER", "AMGX")){
         AMGX->solve(o_Gx.ptr(), o_xBuffer.ptr());
+    } else if (options.compareArgs("COARSE SOLVER", "GINKGO")){
+        ginkgo->solve(o_Gx.ptr(), o_xBuffer.ptr());
     }
 
     // T->E
