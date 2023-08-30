@@ -14,3 +14,17 @@ if(NOT Ginkgo_FOUND)
     set(GINKGO_BUILD_EXAMPLES OFF CACHE INTERNAL "")
     FetchContent_MakeAvailable(Ginkgo)
 endif()
+
+find_package(nlohmann_json 3.9.1 QUIET)
+if(NOT nlohmann_json_FOUND)
+    message(STATUS "Fetching external nlohmann_json")
+    include(FetchContent)
+    FetchContent_Declare(
+        nlohmann_json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG        v3.9.1
+    )
+    set(JSON_BuildTests OFF CACHE INTERNAL "")
+    set(JSON_Install OFF CACHE INTERNAL "")
+    FetchContent_MakeAvailable(nlohmann_json)
+endif()

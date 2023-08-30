@@ -292,7 +292,7 @@ endif()
 
 if(ENABLE_GINKGO)
   target_compile_definitions(nekrs-lib PUBLIC -DENABLE_GINKGO)
-  target_link_libraries(nekrs-lib PUBLIC Ginkgo::ginkgo)
+  target_link_libraries(nekrs-lib PUBLIC Ginkgo::ginkgo nlohmann_json::nlohmann_json)
 endif()
 
 if (ENABLE_CVODE)

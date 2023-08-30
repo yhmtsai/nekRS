@@ -1,10 +1,43 @@
 #include <stdio.h>
 #include <string>
 #include <mpi.h>
+#include <fstream>
 
 #include "ginkgoWrapper.hpp"
 
 #ifdef ENABLE_GINKGO
+
+#include <nlohmann/json.hpp>
+#include <ginkgo/core/config/registry.hpp>
+#include <ginkgo/core/config/config.hpp>
+
+void json_parser(gko::config::pnode &ptree, const nlohmann::json &dom)
+{
+  if (dom.is_array()) {
+    int num = dom.size();
+    ptree.get_array().resize(num);
+    for (int i = 0; i < num; i++) {
+      json_parser(ptree.at(i), dom[i]);
+    }
+  } else if (dom.is_object()) {
+    auto &list = ptree.get_list();
+    for (auto &m : dom.items()) {
+      json_parser(list[m.key()], m.value());
+    }
+  } else {
+    if (dom.is_number_integer()) {
+      ptree = gko::config::pnode{dom.template get<long long int>()};
+    } else if (dom.is_boolean()) {
+      ptree = gko::config::pnode{dom.template get<bool>()};
+    } else if (dom.is_number_float()) {
+      ptree = gko::config::pnode{dom.template get<double>()};
+    } else if (dom.is_string()) {
+      ptree = gko::config::pnode{std::string(dom.template get<std::string>())};
+    } else {
+      ptree = gko::config::pnode{};
+    }
+  }
+}
 
 ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
                              const int nnz,
@@ -22,7 +55,8 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
   fflush(stdout);
   using IndexType = int64_t;
   using ValueType = double;
-  auto exec = gko::CudaExecutor::create(deviceID, gko::ReferenceExecutor::create());
+  std::shared_ptr<const gko::Executor> exec =
+      gko::CudaExecutor::create(deviceID, gko::ReferenceExecutor::create());
 
   MPI_Comm_dup(comm, &comm_);
 
@@ -66,10 +100,19 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
       gko::share(gko::experimental::distributed::Matrix<ValueType, int, IndexType>::create(exec, comm));
   matrix->copy_from(matrix_host.get());
 
-  solver_ = gko::share(gko::solver::Cg<ValueType>::build()
-                           .with_criteria(gko::stop::Iteration::build().with_max_iters(100u).on(exec))
-                           .on(exec)
-                           ->generate(matrix));
+  if (cfg.size()) {
+    gko::config::pnode config;
+    std::ifstream f(cfg);
+    json_parser(config, cfg);
+
+    gko::config::registry reg(gko::config::generate_config_map());
+    solver_ = gko::share(gko::config::build_from_config(config, reg, exec, {"double", "int"})->generate(matrix));
+  } else {
+    solver_ = gko::share(gko::solver::Cg<ValueType>::build()
+                             .with_criteria(gko::stop::Iteration::build().with_max_iters(100u).on(exec))
+                             .on(exec)
+                             ->generate(matrix));
+  }
 }
 
 int ginkgoWrapper::solve(void *rhs, void *x)
