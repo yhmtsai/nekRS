@@ -227,6 +227,11 @@ static std::vector<std::string> boomeramgKeys = {
 static std::vector<std::string> amgxKeys = {
     {"configFile"},
 };
+
+static std::vector<std::string> ginkgoKeys = {
+    {"configFile"},
+};
+
 static std::vector<std::string> occaKeys = {{"backend"}, {"deviceNumber"}, {"platformNumber"}};
 
 static std::vector<std::string> pressureKeys = {};
@@ -249,6 +254,7 @@ static std::vector<std::string> validSections = {
     {"velocity"},
     {"problemtype"},
     {"amgx"},
+    {"ginkgo"},
     {"boomeramg"},
     {"occa"},
     {"mesh"},
@@ -268,6 +274,7 @@ void makeStringsLowerCase()
   lowerCase(scalarKeys);
   lowerCase(deprecatedKeys);
   lowerCase(amgxKeys);
+  lowerCase(ginkgoKeys);
   lowerCase(boomeramgKeys);
   lowerCase(pressureKeys);
   lowerCase(occaKeys);
@@ -298,6 +305,8 @@ const std::vector<std::string> &getValidKeys(const std::string &section)
     return scalarKeys;
   if (section == "amgx")
     return amgxKeys;
+  if (section == "ginkgo")
+    return ginkgoKeys;
   if (section == "boomeramg")
     return boomeramgKeys;
   if (section == "occa")
@@ -760,6 +769,9 @@ void parseCoarseSolver(const int rank, setupAide &options, inipp::Ini *par, std:
       options.setArgs(parSectionName + "COARSE SOLVER LOCATION", "CPU");
       if (options.compareArgs(parSectionName + "MULTIGRID SEMFEM", "TRUE"))
         options.setArgs(parSectionName + "COARSE SOLVER LOCATION", "DEVICE");
+    }
+    if(ginkgo) {
+      options.setArgs(parSectionName + "COARSE SOLVER LOCATION", "DEVICE");
     }
 
     for (std::string entry : entries) {
@@ -1995,6 +2007,14 @@ void parsePressureSection(const int rank, setupAide &options, inipp::Ini *par)
     std::string configFile;
     if (par->extract("amgx", "configfile", configFile))
       options.setArgs("AMGX CONFIG FILE", configFile);
+  }
+  if (par->sections.count("ginkgo")) {
+    if (!ginkgoWrapperenabled()) {
+      append_error("ginkgo was requested but is not compiled!\n");
+    }
+    std::string configFile;
+    if (par->extract("ginkgo", "configfile", configFile))
+      options.setArgs("GINKGO CONFIG FILE", configFile);
   }
 }
 

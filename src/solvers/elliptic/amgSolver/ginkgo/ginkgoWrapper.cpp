@@ -46,18 +46,38 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
                              const double *values, /* COO */
                              const int nullspace,
                              const MPI_Comm comm,
+                             const std::string &backend,
                              int deviceID,
                              int useFP32,
-                             int MPI_DIRECT,
                              const std::string &cfg)
 {
-  printf("Ginkgo: build solver\n");
+  printf("Ginkgo: build solver %s - %s\n", backend.c_str(), cfg.c_str());
   fflush(stdout);
   using IndexType = int64_t;
   using ValueType = double;
-  std::shared_ptr<const gko::Executor> exec =
-      gko::CudaExecutor::create(deviceID, gko::ReferenceExecutor::create());
+  // CPU|CUDA|HIP|DPCPP
+  // CPU: Serial/OpenMP?
+  const std::map<std::string, std::function<std::shared_ptr<const gko::Executor>(int)>> executor_factory{
+      {"CPU",
+       [](int device_id) -> std::shared_ptr<const gko::Executor> {
+         static const std::string not_compiled_tag = "not compiled";
+         auto version = gko::version_info::get();
+         if (version.omp_version.tag != not_compiled_tag) {
+           return gko::OmpExecutor::create();
+         } else {
+           return gko::ReferenceExecutor::create();
+         }
+       }},
+      {"CUDA",
+       [](int device_id) { return gko::CudaExecutor::create(device_id, gko::ReferenceExecutor::create()); }},
+      {"HIP",
+       [](int device_id) { return gko::HipExecutor::create(device_id, gko::ReferenceExecutor::create()); }},
+      {"DPCPP", [](int device_id) {
+         return gko::DpcppExecutor::create(device_id, gko::ReferenceExecutor::create());
+       }}};
+  auto exec = executor_factory.at(backend)(deviceID);
 
+  use_fp32_ = useFP32;
   MPI_Comm_dup(comm, &comm_);
 
   int mpi_rank = 0;
@@ -103,10 +123,12 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
   if (cfg.size()) {
     gko::config::pnode config;
     std::ifstream f(cfg);
-    json_parser(config, cfg);
+    auto json = nlohmann::json::parse(f);
+    json_parser(config, json);
 
     gko::config::registry reg(gko::config::generate_config_map());
-    solver_ = gko::share(gko::config::build_from_config(config, reg, exec, {"double", "int"})->generate(matrix));
+    solver_ =
+        gko::share(gko::config::build_from_config(config, reg, exec, {"double", "int"})->generate(matrix));
   } else {
     solver_ = gko::share(gko::solver::Cg<ValueType>::build()
                              .with_criteria(gko::stop::Iteration::build().with_max_iters(100u).on(exec))
@@ -115,13 +137,10 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
   }
 }
 
-int ginkgoWrapper::solve(void *rhs, void *x)
+template <typename ValueType> int ginkgoWrapper::solve(void *rhs, void *x)
 {
-  // vector always use float
-  using ValueType = float;
   printf("Ginkgo: solve global %ld local %ld \n", num_global_rows_, num_local_rows_);
   fflush(stdout);
-  // on gpu
   auto exec = solver_->get_executor();
   auto x_view = gko::array<ValueType>::view(exec, num_local_rows_, static_cast<ValueType *>(x));
   auto rhs_view = gko::array<ValueType>::view(exec, num_local_rows_, static_cast<ValueType *>(rhs));
@@ -142,6 +161,15 @@ int ginkgoWrapper::solve(void *rhs, void *x)
   return 0;
 }
 
+int ginkgoWrapper::solve(void *rhs, void *x)
+{
+  if (use_fp32_) {
+    return this->template solve<float>(rhs, x);
+  } else {
+    return this->template solve<double>(rhs, x);
+  }
+}
+
 ginkgoWrapper::~ginkgoWrapper()
 {
   MPI_Comm_free(&comm_);
@@ -160,23 +188,35 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
                              const double *values, /* COO */
                              const int nullspace,
                              const MPI_Comm comm,
+                             const std::string &backend,
                              int deviceID,
                              int useFP32,
-                             int MPI_DIRECT,
                              const std::string &cfg)
 {
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  if (rank == 0)
+  if (rank == 0) {
     printf("ERROR: Recompile with Ginkgo support!\n");
+  }
+}
+
+template <ValueType> int ginkgoWrapper::solve(void *rhs, void *x)
+{
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  if (rank == 0) {
+    printf("ERROR: Recompile with Ginkgo support!\n");
+  }
+  return 1;
 }
 
 int ginkgoWrapper::solve(void *x, void *rhs)
 {
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  if (rank == 0)
+  if (rank == 0) {
     printf("ERROR: Recompile with Ginkgo support!\n");
+  }
   return 1;
 }
 

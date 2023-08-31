@@ -151,10 +151,10 @@ void MGSolver_t::coarseLevel_t::setupSolver(
       std::stoi(getenv("NEKRS_GPU_MPI")),
       cfg);
   } else if (options.compareArgs("COARSE SOLVER", "GINKGO")) {
-    nrsCheck(platform->device.mode() != "CUDA", platform->comm.mpiComm, EXIT_FAILURE,
-             "%s\n", "Ginkgo only supports CUDA currently!");
+    nrsCheck(platform->device.mode() == "OPENCL", platform->comm.mpiComm, EXIT_FAILURE,
+             "%s\n", "Ginkgo doesn't supports OPENCL directly!");
     std::string configFile;
-    options.getArgs("GINKGO CONFIG FILE", configFile);
+    platform->options.getArgs("GINKGO CONFIG FILE", configFile);
     ginkgo = new ginkgoWrapper(
       N,
       nnz,
@@ -163,9 +163,9 @@ void MGSolver_t::coarseLevel_t::setupSolver(
       Avals,
       (int) nullSpace,
       comm,
+      platform->device.mode(),
       platform->device.id(),
       useFP32,
-      std::stoi(getenv("NEKRS_GPU_MPI")),
       configFile);
   } else {
     std::string amgSolver;

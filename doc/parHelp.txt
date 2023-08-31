@@ -105,6 +105,7 @@ coarseGridDiscretization    FEM [D]                                    linear fi
 
 coarseSolver/semfemSolver   smoother                                     
                             boomerAMG [D]                              HYPRE's AMG solver
+                            ginkgo                                     Ginkgo solver
                             AmgX                                       NVIDIA's AMG solver
                             +device [D for SEMFEM] 
                               +overlap                                 overlap coarse grid solve in additive MG cycle
@@ -205,6 +206,10 @@ chebyshevRelaxOrder         <int>
 [AMGX]
 
 configFile                  <string>                                   AmgX JSON configuration file
+----------------------------------------------------------------------------------------------------------------------
+[GINKGO]
+
+configFile                  <string>                                   GINKGO JSON configuration file
 ----------------------------------------------------------------------------------------------------------------------
 [CVODE]
 solver                      GMRES                                      linear solver
