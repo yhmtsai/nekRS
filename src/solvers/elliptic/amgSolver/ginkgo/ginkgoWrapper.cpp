@@ -119,7 +119,15 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
   auto matrix =
       gko::share(gko::experimental::distributed::Matrix<ValueType, int, IndexType>::create(exec, comm));
   matrix->copy_from(matrix_host.get());
-
+  std::shared_ptr<gko::LinOp> linop;
+  if (use_fp32_) {
+    auto matrix_float =
+        gko::share(gko::experimental::distributed::Matrix<float, int, IndexType>::create(exec, comm));
+    matrix_float->copy_from(matrix.get());
+    linop = matrix_float;
+  } else {
+    linop = matrix;
+  }
   if (cfg.size()) {
     gko::config::pnode config;
     std::ifstream f(cfg);
@@ -127,13 +135,21 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
     json_parser(config, json);
 
     gko::config::registry reg(gko::config::generate_config_map());
-    solver_ =
-        gko::share(gko::config::build_from_config(config, reg, exec, {"double", "int"})->generate(matrix));
+    std::string default_valtype = use_fp32_ ? "float" : "double";
+    solver_ = gko::share(
+        gko::config::build_from_config(config, reg, exec, {default_valtype, "int"})->generate(linop));
   } else {
-    solver_ = gko::share(gko::solver::Cg<ValueType>::build()
-                             .with_criteria(gko::stop::Iteration::build().with_max_iters(100u).on(exec))
-                             .on(exec)
-                             ->generate(matrix));
+    if (use_fp32_) {
+      solver_ = gko::share(gko::solver::Cg<float>::build()
+                               .with_criteria(gko::stop::Iteration::build().with_max_iters(100u).on(exec))
+                               .on(exec)
+                               ->generate(linop));
+    } else {
+      solver_ = gko::share(gko::solver::Cg<ValueType>::build()
+                               .with_criteria(gko::stop::Iteration::build().with_max_iters(100u).on(exec))
+                               .on(exec)
+                               ->generate(linop));
+    }
   }
 }
 
