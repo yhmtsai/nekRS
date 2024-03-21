@@ -6,7 +6,7 @@ if(NOT Ginkgo_FOUND)
     FetchContent_Declare(
         Ginkgo
         GIT_REPOSITORY https://github.com/ginkgo-project/ginkgo.git
-        GIT_TAG        e831a097488e60196d3778f41a2da86676a51108
+        GIT_TAG        multigrid_config
     )
     set(GINKGO_BUILD_CUDA ON CACHE INTERNAL "")
     set(GINKGO_BUILD_BENCHMARKS OFF CACHE INTERNAL "")

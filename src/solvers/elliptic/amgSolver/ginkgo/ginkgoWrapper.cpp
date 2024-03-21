@@ -20,7 +20,7 @@ void json_parser(gko::config::pnode &ptree, const nlohmann::json &dom)
       json_parser(ptree.at(i), dom[i]);
     }
   } else if (dom.is_object()) {
-    auto &list = ptree.get_list();
+    auto &list = ptree.get_map();
     for (auto &m : dom.items()) {
       json_parser(list[m.key()], m.value());
     }
@@ -137,7 +137,7 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
     gko::config::registry reg(gko::config::generate_config_map());
     std::string default_valtype = use_fp32_ ? "float" : "double";
     solver_ = gko::share(
-        gko::config::build_from_config(config, reg, exec, {default_valtype, "int"})->generate(linop));
+        gko::config::build_from_config(config, reg, {default_valtype, "int"}).on(exec)->generate(linop));
   } else {
     if (use_fp32_) {
       solver_ = gko::share(gko::solver::Cg<float>::build()
