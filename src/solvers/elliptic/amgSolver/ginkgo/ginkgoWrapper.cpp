@@ -51,8 +51,6 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
                              int useFP32,
                              const std::string &cfg)
 {
-  printf("Ginkgo: build solver %s - %s\n", backend.c_str(), cfg.c_str());
-  fflush(stdout);
   using IndexType = int64_t;
   using ValueType = double;
   // CPU|CUDA|HIP|DPCPP
@@ -93,6 +91,11 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
     all_num_rows.get_data()[r] += all_num_rows.get_data()[r - 1];
   }
   num_global_rows_ = all_num_rows.get_const_data()[mpi_size];
+  if (mpi_rank == 0) {
+    printf("Ginkgo: build solver %s - %s\n", backend.c_str(), cfg.c_str());
+  }
+  printf("Ginkgo: solve global %ld local %ld \n", num_global_rows_, num_local_rows_);
+  fflush(stdout);
 
   // use device_matrix_data to handle coo data
   auto rows_view =
@@ -155,8 +158,6 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
 
 template <typename ValueType> int ginkgoWrapper::solve(void *rhs, void *x)
 {
-  printf("Ginkgo: solve global %ld local %ld \n", num_global_rows_, num_local_rows_);
-  fflush(stdout);
   auto exec = solver_->get_executor();
   auto x_view = gko::array<ValueType>::view(exec, num_local_rows_, static_cast<ValueType *>(x));
   auto rhs_view = gko::array<ValueType>::view(exec, num_local_rows_, static_cast<ValueType *>(rhs));
