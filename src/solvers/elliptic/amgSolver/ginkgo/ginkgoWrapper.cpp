@@ -7,37 +7,9 @@
 
 #ifdef ENABLE_GINKGO
 
-#include <nlohmann/json.hpp>
+#include <ginkgo/extensions/config/json_config.hpp>
 #include <ginkgo/core/config/registry.hpp>
 #include <ginkgo/core/config/config.hpp>
-
-void json_parser(gko::config::pnode &ptree, const nlohmann::json &dom)
-{
-  if (dom.is_array()) {
-    int num = dom.size();
-    ptree.get_array().resize(num);
-    for (int i = 0; i < num; i++) {
-      json_parser(ptree.at(i), dom[i]);
-    }
-  } else if (dom.is_object()) {
-    auto &list = ptree.get_map();
-    for (auto &m : dom.items()) {
-      json_parser(list[m.key()], m.value());
-    }
-  } else {
-    if (dom.is_number_integer()) {
-      ptree = gko::config::pnode{dom.template get<long long int>()};
-    } else if (dom.is_boolean()) {
-      ptree = gko::config::pnode{dom.template get<bool>()};
-    } else if (dom.is_number_float()) {
-      ptree = gko::config::pnode{dom.template get<double>()};
-    } else if (dom.is_string()) {
-      ptree = gko::config::pnode{std::string(dom.template get<std::string>())};
-    } else {
-      ptree = gko::config::pnode{};
-    }
-  }
-}
 
 ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
                              const int nnz,
@@ -110,37 +82,34 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
                                                     gko::detail::array_const_cast(std::move(cols_view)),
                                                     gko::detail::array_const_cast(std::move(vals_view)));
   // create the partition
-  auto partition =
+  auto partition = gko::share(
       gko::experimental::distributed::Partition<int, IndexType>::build_from_contiguous(exec->get_master(),
-                                                                                       all_num_rows);
+                                                                                       all_num_rows));
 
   auto matrix_host = gko::share(
       gko::experimental::distributed::Matrix<ValueType, int, IndexType>::create(exec->get_master(), comm_));
   // create the matrix
-  matrix_host->read_distributed(data, partition.get());
+  matrix_host->read_distributed(data, partition);
   // copy to device
   auto matrix =
-      gko::share(gko::experimental::distributed::Matrix<ValueType, int, IndexType>::create(exec, comm));
+      gko::share(gko::experimental::distributed::Matrix<ValueType, int, IndexType>::create(exec, comm_));
   matrix->copy_from(matrix_host.get());
   std::shared_ptr<gko::LinOp> linop;
   if (use_fp32_) {
     auto matrix_float =
-        gko::share(gko::experimental::distributed::Matrix<float, int, IndexType>::create(exec, comm));
+        gko::share(gko::experimental::distributed::Matrix<float, int, IndexType>::create(exec, comm_));
     matrix_float->copy_from(matrix.get());
     linop = matrix_float;
   } else {
     linop = matrix;
   }
   if (cfg.size()) {
-    gko::config::pnode config;
-    std::ifstream f(cfg);
-    auto json = nlohmann::json::parse(f);
-    json_parser(config, json);
+    auto config = gko::ext::config::parse_json_file(cfg);
 
-    gko::config::registry reg(gko::config::generate_config_map());
-    std::string default_valtype = use_fp32_ ? "float" : "double";
-    solver_ = gko::share(
-        gko::config::build_from_config(config, reg, {default_valtype, "int"}).on(exec)->generate(linop));
+    gko::config::registry reg;
+    auto td = use_fp32_ ? gko::config::make_type_descriptor<float, int>()
+                        : gko::config::make_type_descriptor<double, int>();
+    solver_ = gko::share(gko::config::parse(config, reg, td).on(exec)->generate(linop));
   } else {
     if (use_fp32_) {
       solver_ = gko::share(gko::solver::Cg<float>::build()

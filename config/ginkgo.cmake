@@ -1,4 +1,4 @@
-find_package(Ginkgo 1.5.0 QUIET) 
+find_package(Ginkgo 1.8.0 QUIET) 
 
 if(NOT Ginkgo_FOUND)
     message(STATUS "Fetching external Ginkgo")
@@ -6,7 +6,7 @@ if(NOT Ginkgo_FOUND)
     FetchContent_Declare(
         Ginkgo
         GIT_REPOSITORY https://github.com/ginkgo-project/ginkgo.git
-        GIT_TAG        multigrid_config
+        GIT_TAG        develop
     )
     set(GINKGO_BUILD_CUDA ON CACHE INTERNAL "")
     set(GINKGO_BUILD_BENCHMARKS OFF CACHE INTERNAL "")
