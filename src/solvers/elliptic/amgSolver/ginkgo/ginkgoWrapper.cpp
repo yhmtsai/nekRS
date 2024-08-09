@@ -2,6 +2,7 @@
 #include <string>
 #include <mpi.h>
 #include <fstream>
+#include <iostream>
 
 #include "ginkgoWrapper.hpp"
 
@@ -21,10 +22,12 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
                              const std::string &backend,
                              int deviceID,
                              int useFP32,
+                             bool localOnly,
                              const std::string &cfg)
 {
   using IndexType = int64_t;
   using ValueType = double;
+  static_assert(sizeof(IndexType) == sizeof(long long));
   // CPU|CUDA|HIP|DPCPP
   // CPU: Serial/OpenMP?
   const std::map<std::string, std::function<std::shared_ptr<const gko::Executor>(int)>> executor_factory{
@@ -48,6 +51,7 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
   auto exec = executor_factory.at(backend)(deviceID);
 
   use_fp32_ = useFP32;
+  local_only_ = localOnly;
   MPI_Comm_dup(comm, &comm_);
 
   int mpi_rank = 0;
@@ -64,17 +68,23 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
   }
   num_global_rows_ = all_num_rows.get_const_data()[mpi_size];
   if (mpi_rank == 0) {
-    printf("Ginkgo: build solver %s - %s\n", backend.c_str(), cfg.c_str());
+    printf("Ginkgo: build solver %s - %s - localOnly %d\n", backend.c_str(), cfg.c_str(), localOnly);
+    std::ifstream();
+    std::cout << "===== config =====" << std::endl;
+    std::ifstream f(cfg);
+    std::cout << f.rdbuf() << std::endl;
+    std::cout << "===== config =====" << std::endl;
   }
-  printf("Ginkgo: solve global %ld local %ld \n", num_global_rows_, num_local_rows_);
+  printf("Ginkgo: solve global %ld local %ld (rank id %d) nnz %d\n", num_global_rows_, num_local_rows_, mpi_rank, nnz);
   fflush(stdout);
-
+  
   // use device_matrix_data to handle coo data
   auto rows_view =
       gko::array<IndexType>::const_view(exec->get_master(), nnz, reinterpret_cast<const IndexType *>(rows));
   auto cols_view =
       gko::array<IndexType>::const_view(exec->get_master(), nnz, reinterpret_cast<const IndexType *>(cols));
   auto vals_view = gko::array<ValueType>::const_view(exec->get_master(), nnz, values);
+  std::cout << "first elem of rank " << mpi_rank << " " << rows[0] << ", " << cols[0] << ", " << values[0] << std::endl; 
   auto data =
       gko::device_matrix_data<ValueType, IndexType>(exec->get_master(),
                                                     gko::dim<2>{num_global_rows_, num_global_rows_},
@@ -85,6 +95,14 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
   auto partition = gko::share(
       gko::experimental::distributed::Partition<int, IndexType>::build_from_contiguous(exec->get_master(),
                                                                                        all_num_rows));
+  if (mpi_rank == 0) {
+    auto num_parts = partition->get_num_parts();
+    std::cout << "num_parts: " << num_parts << " should be the same as " << mpi_size << std::endl;
+    for (int i = 0; i < num_parts; i++) {
+      std::cout << "rank:" << i << " " << partition->get_part_size(i) << std::endl;
+    }
+  }
+  MPI_Barrier(comm_);
 
   auto matrix_host = gko::share(
       gko::experimental::distributed::Matrix<ValueType, int, IndexType>::create(exec->get_master(), comm_));
@@ -196,7 +214,7 @@ template <ValueType> int ginkgoWrapper::solve(void *rhs, void *x)
   return 1;
 }
 
-int ginkgoWrapper::solve(void *x, void *rhs)
+int ginkgoWrapper::solve(void *rhs, void *x)
 {
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);

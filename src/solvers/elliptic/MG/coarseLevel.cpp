@@ -155,6 +155,7 @@ void MGSolver_t::coarseLevel_t::setupSolver(
              "%s\n", "Ginkgo doesn't supports OPENCL directly!");
     std::string configFile;
     platform->options.getArgs("GINKGO CONFIG FILE", configFile);
+    const bool localOnly = platform->options.compareArgs("GINKGO LOCAL ONLY", "TRUE");
     ginkgo = new ginkgoWrapper(
       N,
       nnz,
@@ -166,6 +167,7 @@ void MGSolver_t::coarseLevel_t::setupSolver(
       platform->device.mode(),
       platform->device.id(),
       useFP32,
+      localOnly,
       configFile);
   } else {
     std::string amgSolver;

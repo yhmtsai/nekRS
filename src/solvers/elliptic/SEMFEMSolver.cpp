@@ -150,6 +150,7 @@ SEMFEMSolver_t::SEMFEMSolver_t(elliptic_t* elliptic_)
              "%s\n", "Ginkgo doesn't supports OPENCL directly!");
     std::string configFile;
     platform->options.getArgs("GINKGO CONFIG FILE", configFile);
+    const bool localOnly = platform->options.compareArgs("GINKGO LOCAL ONLY", "TRUE");
     ginkgo = new ginkgoWrapper(
       numRows,
       matrix->nnz,
@@ -161,6 +162,7 @@ SEMFEMSolver_t::SEMFEMSolver_t(elliptic_t* elliptic_)
       platform->device.mode(),
       platform->device.id(),
       useFP32,
+      localOnly,
       configFile);
   }
   else {
