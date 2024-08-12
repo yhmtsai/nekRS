@@ -68,23 +68,32 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
   }
   num_global_rows_ = all_num_rows.get_const_data()[mpi_size];
   if (mpi_rank == 0) {
-    printf("Ginkgo: build solver %s - %s - localOnly %d - useFP32 %d\n", backend.c_str(), cfg.c_str(), local_only_, use_fp32_);
+    printf("Ginkgo: build solver %s - %s - localOnly %d - useFP32 %d\n",
+           backend.c_str(),
+           cfg.c_str(),
+           local_only_,
+           use_fp32_);
     std::ifstream();
     std::cout << "===== config =====" << std::endl;
     std::ifstream f(cfg);
     std::cout << f.rdbuf() << std::endl;
     std::cout << "===== config =====" << std::endl;
   }
-  printf("Ginkgo: solve global %ld local %ld (rank id %d) nnz %d\n", num_global_rows_, num_local_rows_, mpi_rank, nnz);
+  printf("Ginkgo: solve global %ld local %ld (rank id %d) nnz %d\n",
+         num_global_rows_,
+         num_local_rows_,
+         mpi_rank,
+         nnz);
   fflush(stdout);
-  
+
   // use device_matrix_data to handle coo data
   auto rows_view =
       gko::array<IndexType>::const_view(exec->get_master(), nnz, reinterpret_cast<const IndexType *>(rows));
   auto cols_view =
       gko::array<IndexType>::const_view(exec->get_master(), nnz, reinterpret_cast<const IndexType *>(cols));
   auto vals_view = gko::array<ValueType>::const_view(exec->get_master(), nnz, values);
-  std::cout << "first elem of rank " << mpi_rank << " " << rows[0] << ", " << cols[0] << ", " << values[0] << std::endl; 
+  std::cout << "first elem of rank " << mpi_rank << " " << rows[0] << ", " << cols[0] << ", " << values[0]
+            << std::endl;
   auto data =
       gko::device_matrix_data<ValueType, IndexType>(exec->get_master(),
                                                     gko::dim<2>{num_global_rows_, num_global_rows_},
@@ -112,14 +121,33 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
   auto matrix =
       gko::share(gko::experimental::distributed::Matrix<ValueType, int, IndexType>::create(exec, comm_));
   matrix->copy_from(matrix_host.get());
+  std::cout << "rank:" << mpi_rank << " local size " << matrix->get_local_matrix()->get_size()
+            << " non_local size " << matrix->get_non_local_matrix()->get_size() << std::endl;
+
   std::shared_ptr<gko::LinOp> linop;
-  if (use_fp32_) {
-    auto matrix_float =
-        gko::share(gko::experimental::distributed::Matrix<float, int, IndexType>::create(exec, comm_));
-    matrix_float->copy_from(matrix.get());
-    linop = matrix_float;
+  if (local_only_) {
+    auto local_matrix = matrix->get_local_matrix();
+    if (use_fp32_) {
+      auto matrix_float = gko::share(gko::matrix::Csr<float, int>::create(exec));
+      matrix_float->copy_from(local_matrix.get());
+      linop = matrix_float;
+    } else {
+      auto matrix_double = gko::share(gko::matrix::Csr<double, int>::create(exec));
+      matrix_double->copy_from(local_matrix.get());
+      linop = matrix_double;
+    }
   } else {
-    linop = matrix;
+    if (use_fp32_) {
+      auto matrix_float =
+          gko::share(gko::experimental::distributed::Matrix<float, int, IndexType>::create(exec, comm_));
+      matrix_float->copy_from(matrix.get());
+      linop = matrix_float;
+    } else {
+      linop = matrix;
+    }
+  }
+  if (mpi_rank == 0) {
+    std::cout << "Rank 0 system_matrix size: " << linop->get_size() << std::endl;
   }
   if (cfg.size()) {
     auto config = gko::ext::config::parse_json_file(cfg);
@@ -152,15 +180,19 @@ template <typename ValueType> int ginkgoWrapper::solve(void *rhs, void *x)
       gko::matrix::Dense<ValueType>::create(exec, gko::dim<2>{num_local_rows_, 1}, std::move(x_view), 1);
   auto dense_rhs =
       gko::matrix::Dense<ValueType>::create(exec, gko::dim<2>{num_local_rows_, 1}, std::move(rhs_view), 1);
-  auto par_x = gko::experimental::distributed::Vector<ValueType>::create(exec,
-                                                                         comm_,
-                                                                         gko::dim<2>{num_global_rows_, 1},
-                                                                         gko::give(dense_x));
-  auto par_rhs = gko::experimental::distributed::Vector<ValueType>::create(exec,
+  if (local_only_) {
+    solver_->apply(dense_rhs.get(), dense_x.get());
+  } else {
+    auto par_x = gko::experimental::distributed::Vector<ValueType>::create(exec,
                                                                            comm_,
                                                                            gko::dim<2>{num_global_rows_, 1},
-                                                                           gko::give(dense_rhs));
-  solver_->apply(par_rhs.get(), par_x.get());
+                                                                           gko::give(dense_x));
+    auto par_rhs = gko::experimental::distributed::Vector<ValueType>::create(exec,
+                                                                             comm_,
+                                                                             gko::dim<2>{num_global_rows_, 1},
+                                                                             gko::give(dense_rhs));
+    solver_->apply(par_rhs.get(), par_x.get());
+  }
 
   return 0;
 }
