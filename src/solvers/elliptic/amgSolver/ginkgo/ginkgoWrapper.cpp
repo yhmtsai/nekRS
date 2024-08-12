@@ -68,7 +68,7 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
   }
   num_global_rows_ = all_num_rows.get_const_data()[mpi_size];
   if (mpi_rank == 0) {
-    printf("Ginkgo: build solver %s - %s - localOnly %d\n", backend.c_str(), cfg.c_str(), localOnly);
+    printf("Ginkgo: build solver %s - %s - localOnly %d - useFP32 %d\n", backend.c_str(), cfg.c_str(), local_only_, use_fp32_);
     std::ifstream();
     std::cout << "===== config =====" << std::endl;
     std::ifstream f(cfg);
