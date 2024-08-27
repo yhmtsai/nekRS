@@ -146,6 +146,7 @@ set(NRS_INCLUDE
     PRIVATE
     ${ELLIPTIC_SOURCE_DIR}/amgSolver/hypre
     ${ELLIPTIC_SOURCE_DIR}/amgSolver/amgx
+    ${ELLIPTIC_SOURCE_DIR}/amgSolver/ginkgo
     ${ELLIPTIC_SOURCE_DIR}/MG
 )
 

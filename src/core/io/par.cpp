@@ -8,6 +8,7 @@
 
 #include "ellipticParseMultigridSchedule.hpp"
 #include "hypreWrapperDevice.hpp"
+#include "ginkgoWrapper.hpp"
 
 #include "AMGX.hpp"
 
@@ -227,6 +228,11 @@ static std::vector<std::string> cvodeKeys = {
     {"solver"},
 };
 
+static std::vector<std::string> ginkgoKeys = {
+    {"configFile"},
+    {"localOnly"},
+};
+
 static std::vector<std::string> boomeramgKeys = {
     {"coarsenType"},
     {"interpolationType"},
@@ -267,6 +273,7 @@ static std::vector<std::string> validSections = {
     {"velocity"},
     {"problemtype"},
     {"amgx"},
+    {"ginkgo"},
     {"boomeramg"},
     {"occa"},
     {"mesh"},
@@ -287,6 +294,7 @@ void makeStringsLowerCase()
   lowerCase(scalarKeys);
   lowerCase(deprecatedKeys);
   lowerCase(amgxKeys);
+  lowerCase(ginkgoKeys);
   lowerCase(boomeramgKeys);
   lowerCase(pressureKeys);
   lowerCase(occaKeys);
@@ -348,6 +356,9 @@ const std::vector<std::string> &getValidKeys(const std::string &section)
   }
   if (section == "amgx") {
     return amgxKeys;
+  }
+  if (section == "ginkgo") {
+    return ginkgoKeys;
   }
   if (section == "boomeramg") {
     return boomeramgKeys;
@@ -832,6 +843,7 @@ void parseCoarseSolver(const int rank, setupAide &options, inipp::Ini *ini, std:
       {"smoother"},
       {"boomeramg"},
       {"amgx"},
+      {"ginkgo"},
       {"cpu"},
       {"device"},
       {"overlap"},
@@ -844,8 +856,9 @@ void parseCoarseSolver(const int rank, setupAide &options, inipp::Ini *ini, std:
 
   const int smoother = p_coarseSolver.find("smoother") != std::string::npos;
   const int amgx = p_coarseSolver.find("amgx") != std::string::npos;
+  const int ginkgo = p_coarseSolver.find("ginkgo") != std::string::npos;
   const int boomer = p_coarseSolver.find("boomeramg") != std::string::npos;
-  if (amgx + boomer > 1) {
+  if (ginkgo + amgx + boomer > 1) {
     append_error("Conflicting solver types in coarseSolver!\n");
   }
 
@@ -860,13 +873,18 @@ void parseCoarseSolver(const int rank, setupAide &options, inipp::Ini *ini, std:
     }
   }
 
-  if (boomer || amgx) {
+  if (boomer || amgx || ginkgo) {
     options.setArgs(parSectionName + "MULTIGRID COARSE SOLVE", "TRUE");
     options.setArgs(parSectionName + "COARSE SOLVER", "BOOMERAMG");
     if (amgx) {
       options.setArgs(parSectionName + "COARSE SOLVER", "AMGX");
       if (!AMGXenabled()) {
         append_error("AMGX was requested but is not enabled!\n");
+      }
+    } else if (ginkgo) {
+      options.setArgs(parSectionName + "COARSE SOLVER", "GINKGO");
+      if (!ginkgoWrapperenabled()) {
+        append_error("Ginkgo was requested but is not enabled!\n");
       }
     }
 
@@ -878,6 +896,10 @@ void parseCoarseSolver(const int rank, setupAide &options, inipp::Ini *ini, std:
       if (options.compareArgs(parSectionName + "MULTIGRID SEMFEM", "TRUE")) {
         options.setArgs(parSectionName + "COARSE SOLVER LOCATION", "DEVICE");
       }
+    }
+    // maybe not need?
+    if (ginkgo) {
+      options.setArgs(parSectionName + "COARSE SOLVER LOCATION", "DEVICE");
     }
 
     for (std::string entry : entries) {
@@ -2150,6 +2172,32 @@ void parsePressureSection(const int rank, setupAide &options, inipp::Ini *ini)
     std::string configFile;
     if (ini->extract("amgx", "configfile", configFile)) {
       options.setArgs("AMGX CONFIG FILE", configFile);
+    }
+  }
+  if (ini->sections.count("ginkgo")) {
+    if (!ginkgoWrapperenabled()) {
+      append_error("ginkgo was requested but is not compiled!\n");
+    }
+    std::string configFile;
+    if (ini->extract("ginkgo", "configfile", configFile)) {
+      options.setArgs("GINKGO CONFIG FILE", configFile);
+    }
+    std::string localOnly;
+    const std::vector<std::string> validValues = {
+        {"yes"},
+        {"true"},
+        {"1"},
+        {"no"},
+        {"false"},
+        {"0"},
+    };
+    if (ini->extract("ginkgo", "localOnly", localOnly)) {
+      checkValidity(rank, validValues, localOnly);
+      if (checkForTrue(localOnly)) {
+        options.setArgs("GINKGO LOCAL ONLY", "TRUE");
+      } else {
+        options.setArgs("GINKGO LOCAL ONLY", "FALSE");
+      }
     }
   }
 }

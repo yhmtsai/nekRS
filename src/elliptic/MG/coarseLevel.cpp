@@ -159,6 +159,27 @@ void MGSolver_t::coarseLevel_t::setupSolver(
                       useFP32,
                       std::stoi(getenv("NEKRS_GPU_MPI")),
                       cfg);
+  } else if (options.compareArgs("COARSE SOLVER", "GINKGO")) {
+    nekrsCheck(platform->device.mode() == "OPENCL",
+               platform->comm.mpiComm,
+               EXIT_FAILURE,
+               "%s\n",
+               "Ginkgo doesn't supports OPENCL directly!");
+    std::string configFile;
+    platform->options.getArgs("GINKGO CONFIG FILE", configFile);
+    const bool localOnly = platform->options.compareArgs("GINKGO LOCAL ONLY", "TRUE");
+    ginkgo = new ginkgoWrapper(N,
+                               nnz,
+                               Ai,
+                               Aj,
+                               Avals,
+                               (int)nullSpace,
+                               comm,
+                               platform->device.mode(),
+                               platform->device.id(),
+                               useFP32,
+                               localOnly,
+                               configFile);
   } else {
     std::string amgSolver;
     options.getArgs("COARSE SOLVER", amgSolver);
@@ -186,6 +207,9 @@ MGSolver_t::coarseLevel_t::~coarseLevel_t()
   }
   if (AMGX) {
     delete AMGX;
+  }
+  if (ginkgo) {
+    delete ginkgo;
   }
 
   h_xBuffer.free();
@@ -227,6 +251,8 @@ void MGSolver_t::coarseLevel_t::solve(occa::memory &o_rhs, occa::memory &o_x)
       }
     } else if (options.compareArgs("COARSE SOLVER", "AMGX")) {
       AMGX->solve(o_Gx.ptr(), o_xBuffer.ptr());
+    } else if (options.compareArgs("COARSE SOLVER", "GINKGO")) {
+      ginkgo->solve(o_Gx.ptr(), o_xBuffer.ptr());
     }
 
     // masked T->E

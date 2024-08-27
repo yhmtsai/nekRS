@@ -126,6 +126,7 @@ coarseGridDiscretization    FEM [D]                                    linear fi
                             SEMFEM                                     linear FEM approx on high-order nodes
 
 coarseSolver/semfemSolver   smoother                                     
+                            ginkgo                                     Ginkgo solver
                             boomerAMG [D]                              HYPRE's AMG solver
                               +cpu [D for multigrid]
                               +device [D for SEMFEM] 
@@ -213,6 +214,9 @@ D
 [SCALAR01]
 
 ...
+----------------------------------------------------------------------------------------------------------------------
+configFile                  <string>                                   GINKGO JSON configuration file
+localOnly                   <true/false>                               Only build a local solver
 ----------------------------------------------------------------------------------------------------------------------
 [BOOMERAMG]
 

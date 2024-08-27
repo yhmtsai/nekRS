@@ -19,8 +19,7 @@ SEMFEMSolver_t::SEMFEMSolver_t(elliptic_t *elliptic_)
   }
   fflush(stdout);
 
-  const auto mask = [&]() 
-  {
+  const auto mask = [&]() {
     std::vector<int> mask(mesh->Nlocal, 1);
     if (elliptic->Nmasked > 0) {
       std::vector<int> maskIds(elliptic->o_maskIds.size());
@@ -130,6 +129,27 @@ SEMFEMSolver_t::SEMFEMSolver_t(elliptic_t *elliptic_)
                       useFP32,
                       std::stoi(getenv("NEKRS_GPU_MPI")),
                       cfg);
+  } else if (elliptic->options.compareArgs("COARSE SOLVER", "GINKGO")) {
+    nekrsCheck(platform->device.mode() == "OPENCL",
+             platform->comm.mpiComm,
+             EXIT_FAILURE,
+             "%s\n",
+             "Ginkgo doesn't supports OPENCL directly!");
+    std::string configFile;
+    platform->options.getArgs("GINKGO CONFIG FILE", configFile);
+    const bool localOnly = platform->options.compareArgs("GINKGO LOCAL ONLY", "TRUE");
+    ginkgo = new ginkgoWrapper(numRows,
+                               matrix.nnz,
+                               matrix.Ai.data(),
+                               matrix.Aj.data(),
+                               matrix.Av.data(),
+                               (int)elliptic->allNeumann,
+                               platform->comm.mpiComm,
+                               platform->device.mode(),
+                               platform->device.id(),
+                               useFP32,
+                               localOnly,
+                               configFile);
   } else {
     std::string amgSolver;
     elliptic->options.getArgs("COARSE SOLVER", amgSolver);
@@ -158,6 +178,9 @@ SEMFEMSolver_t::~SEMFEMSolver_t()
   if (AMGX) {
     delete AMGX;
   }
+  if (ginkgo) {
+    delete ginkgo;
+  }
 
   o_dofMap.free();
 }
@@ -181,9 +204,13 @@ void SEMFEMSolver_t::run(const occa::memory &o_r, occa::memory &o_z)
 
     if (!useDevice) {
       static std::vector<pfloat> rT;
-      if (rT.size() < numRows) rT.resize(o_rT.size());
+      if (rT.size() < numRows) {
+        rT.resize(o_rT.size());
+      }
       static std::vector<pfloat> zT;
-      if (zT.size() < numRows) zT.resize(o_zT.size());
+      if (zT.size() < numRows) {
+        zT.resize(o_zT.size());
+      }
 
       o_rT.copyTo(rT.data());
       auto boomerAMG = (hypreWrapper::boomerAMG_t *)this->boomerAMG;
@@ -198,10 +225,13 @@ void SEMFEMSolver_t::run(const occa::memory &o_r, occa::memory &o_z)
 
     AMGX->solve(o_rT.ptr(), o_zT.ptr());
 
+  } else if (elliptic->options.compareArgs("COARSE SOLVER", "GINKGO") && useDevice) {
+
+    ginkgo->solve(o_rT.ptr(), o_zT.ptr());
+
   } else {
 
     nekrsAbort(platform->comm.mpiComm, EXIT_FAILURE, "%s\n", "Unknown solver!");
-
   }
 
   static occa::kernel scatterKernel;
