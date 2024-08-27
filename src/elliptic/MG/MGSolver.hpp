@@ -36,6 +36,7 @@ SOFTWARE.
 #include "hypreWrapper.hpp"
 #include "hypreWrapperDevice.hpp"
 #include "AMGX.hpp"
+#include "ginkgoWrapper.hpp"
 
 class MGSolver_t
 {
@@ -65,7 +66,6 @@ public:
     virtual void coarsen(occa::memory o_x, occa::memory o_Cx) = 0;
 
     virtual void prolongate(occa::memory o_x, occa::memory o_Px) = 0;
-
 
     virtual void Report() = 0;
   };
@@ -102,6 +102,7 @@ public:
 
     void *boomerAMG = nullptr;
     AMGX_t *AMGX = nullptr;
+    ginkgoWrapper *ginkgo = nullptr;
   };
 
   MPI_Comm comm;

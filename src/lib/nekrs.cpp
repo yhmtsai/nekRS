@@ -15,6 +15,7 @@
 #include "hypreWrapperDevice.hpp"
 #include "compileKernels.hpp"
 #include "tavg.hpp"
+#include "ginkgoWrapper.hpp"
 
 // define extern variable from nekrsSys.hpp
 platform_t *platform;

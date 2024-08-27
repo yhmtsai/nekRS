@@ -129,6 +129,27 @@ SEMFEMSolver_t::SEMFEMSolver_t(elliptic_t *elliptic_)
                       useFP32,
                       std::stoi(getenv("NEKRS_GPU_MPI")),
                       cfg);
+  } else if (elliptic->options.compareArgs("COARSE SOLVER", "GINKGO")) {
+    nekrsCheck(platform->device.mode() == "OPENCL",
+             platform->comm.mpiComm,
+             EXIT_FAILURE,
+             "%s\n",
+             "Ginkgo doesn't supports OPENCL directly!");
+    std::string configFile;
+    platform->options.getArgs("GINKGO CONFIG FILE", configFile);
+    const bool localOnly = platform->options.compareArgs("GINKGO LOCAL ONLY", "TRUE");
+    ginkgo = new ginkgoWrapper(numRows,
+                               matrix.nnz,
+                               matrix.Ai.data(),
+                               matrix.Aj.data(),
+                               matrix.Av.data(),
+                               (int)elliptic->allNeumann,
+                               platform->comm.mpiComm,
+                               platform->device.mode(),
+                               platform->device.id(),
+                               useFP32,
+                               localOnly,
+                               configFile);
   } else {
     std::string amgSolver;
     elliptic->options.getArgs("COARSE SOLVER", amgSolver);
@@ -156,6 +177,9 @@ SEMFEMSolver_t::~SEMFEMSolver_t()
   }
   if (AMGX) {
     delete AMGX;
+  }
+  if (ginkgo) {
+    delete ginkgo;
   }
 
   o_dofMap.free();
@@ -200,6 +224,10 @@ void SEMFEMSolver_t::run(const occa::memory &o_r, occa::memory &o_z)
   } else if (elliptic->options.compareArgs("COARSE SOLVER", "AMGX") && useDevice) {
 
     AMGX->solve(o_rT.ptr(), o_zT.ptr());
+
+  } else if (elliptic->options.compareArgs("COARSE SOLVER", "GINKGO") && useDevice) {
+
+    ginkgo->solve(o_rT.ptr(), o_zT.ptr());
 
   } else {
 

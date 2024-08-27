@@ -31,6 +31,7 @@ SOFTWARE.
 
 #include "hypreWrapper.hpp"
 #include "hypreWrapperDevice.hpp"
+#include "ginkgoWrapper.hpp"
 #include "AMGX.hpp"
 
 class SEMFEMSolver_t
@@ -47,6 +48,7 @@ private:
 
   void *boomerAMG = nullptr;
   AMGX_t *AMGX = nullptr;
+  ginkgoWrapper *ginkgo = nullptr;
   elliptic_t *elliptic = nullptr;
 
   struct matrix_t {
@@ -65,7 +67,7 @@ private:
                        occa::memory _o_x,
                        occa::memory _o_y,
                        occa::memory _o_z,
-                       const std::vector<int>& pmask_,
+                       const std::vector<int> &pmask_,
                        double lambda,
                        void *gsh);
 };
