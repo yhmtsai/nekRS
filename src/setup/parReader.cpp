@@ -229,7 +229,7 @@ static std::vector<std::string> amgxKeys = {
 };
 
 static std::vector<std::string> ginkgoKeys = {
-    {"configFile"}, {"localOnly"},
+    {"configFile"}, {"localOnly"}, {"profiling"}, 
 };
 
 static std::vector<std::string> occaKeys = {{"backend"}, {"deviceNumber"}, {"platformNumber"}};
@@ -2031,6 +2031,16 @@ void parsePressureSection(const int rank, setupAide &options, inipp::Ini *par)
       }
       else {
         options.setArgs("GINKGO LOCAL ONLY", "FALSE");
+      }
+    }
+    std::string profiling;
+    if (par->extract("ginkgo", "profiling", profiling)) {
+      checkValidity(rank, validValues, profiling);
+      if (checkForTrue(profiling)) {
+        options.setArgs("GINKGO PROFILING", "TRUE");
+      }
+      else {
+        options.setArgs("GINKGO PROFILING", "FALSE");
       }
     }
   }

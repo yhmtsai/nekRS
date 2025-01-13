@@ -26,6 +26,7 @@ public:
                 int deviceID,
                 int useFP32,
                 bool localOnly,
+                bool profiling,
                 const std::string &cfg);
 
   template <typename ValueType> int solve(void *rhs, void *x);
@@ -38,7 +39,9 @@ private:
   int64_t num_global_rows_;
   int use_fp32_;
   bool local_only_;
+  bool profiling_;
 #ifdef ENABLE_GINKGO
+  std::shared_ptr<gko::Executor> exec_;
   std::shared_ptr<gko::LinOp> solver_;
 #endif
 };
