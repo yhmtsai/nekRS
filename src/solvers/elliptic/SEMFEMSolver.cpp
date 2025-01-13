@@ -151,6 +151,7 @@ SEMFEMSolver_t::SEMFEMSolver_t(elliptic_t* elliptic_)
     std::string configFile;
     platform->options.getArgs("GINKGO CONFIG FILE", configFile);
     const bool localOnly = platform->options.compareArgs("GINKGO LOCAL ONLY", "TRUE");
+    const bool profiling = platform->options.compareArgs("GINKGO PROFILING", "TRUE");
     ginkgo = new ginkgoWrapper(
       numRows,
       matrix->nnz,
@@ -163,6 +164,7 @@ SEMFEMSolver_t::SEMFEMSolver_t(elliptic_t* elliptic_)
       platform->device.id(),
       useFP32,
       localOnly,
+      profiling,
       configFile);
   }
   else {

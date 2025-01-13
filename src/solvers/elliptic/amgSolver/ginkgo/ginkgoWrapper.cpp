@@ -23,6 +23,7 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
                              int deviceID,
                              int useFP32,
                              bool localOnly,
+                             bool profiling,
                              const std::string &cfg)
 {
   using IndexType = int64_t;
@@ -30,9 +31,9 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
   static_assert(sizeof(IndexType) == sizeof(long long));
   // CPU|CUDA|HIP|DPCPP
   // CPU: Serial/OpenMP?
-  const std::map<std::string, std::function<std::shared_ptr<const gko::Executor>(int)>> executor_factory{
+  std::map<std::string, std::function<std::shared_ptr<gko::Executor>(int)>> executor_factory{
       {"CPU",
-       [](int device_id) -> std::shared_ptr<const gko::Executor> {
+       [](int device_id) -> std::shared_ptr<gko::Executor> {
          static const std::string not_compiled_tag = "not compiled";
          auto version = gko::version_info::get();
          if (version.omp_version.tag != not_compiled_tag) {
@@ -48,10 +49,11 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
       {"DPCPP", [](int device_id) {
          return gko::DpcppExecutor::create(device_id, gko::ReferenceExecutor::create());
        }}};
-  auto exec = executor_factory.at(backend)(deviceID);
-
+  exec_ = executor_factory.at(backend)(deviceID);
+  auto exec = exec_;
   use_fp32_ = useFP32;
   local_only_ = localOnly;
+  profiling_ = profiling;
   MPI_Comm_dup(comm, &comm_);
 
   int mpi_rank = 0;
@@ -68,10 +70,11 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
   }
   num_global_rows_ = all_num_rows.get_const_data()[mpi_size];
   if (mpi_rank == 0) {
-    printf("Ginkgo: build solver %s - %s - localOnly %d - useFP32 %d\n",
+    printf("Ginkgo: build solver %s - %s - localOnly %d - profiling %d - useFP32 %d\n",
            backend.c_str(),
            cfg.c_str(),
            local_only_,
+           profiling_,
            use_fp32_);
     std::ifstream();
     std::cout << "===== config =====" << std::endl;
@@ -173,27 +176,44 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
 
 template <typename ValueType> int ginkgoWrapper::solve(void *rhs, void *x)
 {
-  auto exec = solver_->get_executor();
+  auto exec = exec_;
   auto x_view = gko::array<ValueType>::view(exec, num_local_rows_, static_cast<ValueType *>(x));
   auto rhs_view = gko::array<ValueType>::view(exec, num_local_rows_, static_cast<ValueType *>(rhs));
   auto dense_x =
       gko::matrix::Dense<ValueType>::create(exec, gko::dim<2>{num_local_rows_, 1}, std::move(x_view), 1);
   auto dense_rhs =
       gko::matrix::Dense<ValueType>::create(exec, gko::dim<2>{num_local_rows_, 1}, std::move(rhs_view), 1);
-  if (local_only_) {
-    solver_->apply(dense_rhs.get(), dense_x.get());
-  } else {
-    auto par_x = gko::experimental::distributed::Vector<ValueType>::create(exec,
-                                                                           comm_,
-                                                                           gko::dim<2>{num_global_rows_, 1},
-                                                                           gko::give(dense_x));
-    auto par_rhs = gko::experimental::distributed::Vector<ValueType>::create(exec,
+
+  auto run = [&]() {
+    if (local_only_) {
+      solver_->apply(dense_rhs.get(), dense_x.get());
+    } else {
+      auto par_x = gko::experimental::distributed::Vector<ValueType>::create(exec,
                                                                              comm_,
                                                                              gko::dim<2>{num_global_rows_, 1},
-                                                                             gko::give(dense_rhs));
-    solver_->apply(par_rhs.get(), par_x.get());
-  }
+                                                                             gko::give(dense_x));
+      auto par_rhs =
+          gko::experimental::distributed::Vector<ValueType>::create(exec,
+                                                                    comm_,
+                                                                    gko::dim<2>{num_global_rows_, 1},
+                                                                    gko::give(dense_rhs));
+      solver_->apply(par_rhs.get(), par_x.get());
+    }
+  };
 
+  static int step = 0;
+  if (profiling_) {
+    auto profiler = gko::log::ProfilerHook::create_for_executor(exec);
+    exec->add_logger(profiler);
+    std::string name = "Ginkgo_";
+    name += std::to_string(step);
+    auto range = profiler->user_range(name.c_str());
+    run();
+    exec->remove_logger(profiler);
+  } else {
+    run();
+  }
+  step++;
   return 0;
 }
 
