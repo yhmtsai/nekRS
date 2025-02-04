@@ -157,6 +157,7 @@ void MGSolver_t::coarseLevel_t::setupSolver(
     platform->options.getArgs("GINKGO CONFIG FILE", configFile);
     const bool localOnly = platform->options.compareArgs("GINKGO LOCAL ONLY", "TRUE");
     const bool profiling = platform->options.compareArgs("GINKGO PROFILING", "TRUE");
+    const bool useHalf = platform->options.compareArgs("GINKGO USE HALF", "TRUE");
     ginkgo = new ginkgoWrapper(
       N,
       nnz,
@@ -170,6 +171,7 @@ void MGSolver_t::coarseLevel_t::setupSolver(
       useFP32,
       localOnly,
       profiling,
+      useHalf,
       configFile);
   } else {
     std::string amgSolver;

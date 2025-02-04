@@ -27,6 +27,7 @@ public:
                 int useFP32,
                 bool localOnly,
                 bool profiling,
+                bool useHalf,
                 const std::string &cfg);
 
   template <typename ValueType> int solve(void *rhs, void *x);
@@ -40,9 +41,12 @@ private:
   int use_fp32_;
   bool local_only_;
   bool profiling_;
+  bool use_half_;
 #ifdef ENABLE_GINKGO
   std::shared_ptr<gko::Executor> exec_;
   std::shared_ptr<gko::LinOp> solver_;
+  std::shared_ptr<gko::LinOp> half_rhs_;
+  std::shared_ptr<gko::LinOp> half_x_;
 #endif
 };
 

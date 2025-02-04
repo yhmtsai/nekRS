@@ -229,7 +229,7 @@ static std::vector<std::string> amgxKeys = {
 };
 
 static std::vector<std::string> ginkgoKeys = {
-    {"configFile"}, {"localOnly"}, {"profiling"}, 
+    {"configFile"}, {"localOnly"}, {"profiling"}, {"useHalf"},
 };
 
 static std::vector<std::string> occaKeys = {{"backend"}, {"deviceNumber"}, {"platformNumber"}};
@@ -2041,6 +2041,16 @@ void parsePressureSection(const int rank, setupAide &options, inipp::Ini *par)
       }
       else {
         options.setArgs("GINKGO PROFILING", "FALSE");
+      }
+    }
+    std::string useHalf;
+    if (par->extract("ginkgo", "useHalf", useHalf)) {
+      checkValidity(rank, validValues, useHalf);
+      if (checkForTrue(useHalf)) {
+        options.setArgs("GINKGO USE HALF", "TRUE");
+      }
+      else {
+        options.setArgs("GINKGO USE HALF", "FALSE");
       }
     }
   }

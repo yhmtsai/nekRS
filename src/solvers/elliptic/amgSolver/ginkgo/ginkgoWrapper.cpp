@@ -24,6 +24,7 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
                              int useFP32,
                              bool localOnly,
                              bool profiling,
+                             bool useHalf,
                              const std::string &cfg)
 {
   using IndexType = int64_t;
@@ -54,6 +55,7 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
   use_fp32_ = useFP32;
   local_only_ = localOnly;
   profiling_ = profiling;
+  use_half_ = useHalf;
   MPI_Comm_dup(comm, &comm_);
 
   int mpi_rank = 0;
@@ -70,12 +72,13 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
   }
   num_global_rows_ = all_num_rows.get_const_data()[mpi_size];
   if (mpi_rank == 0) {
-    printf("Ginkgo: build solver %s - %s - localOnly %d - profiling %d - useFP32 %d\n",
+    printf("Ginkgo: build solver %s - %s - localOnly %d - profiling %d - useFP32 %d - useHalf %d\n",
            backend.c_str(),
            cfg.c_str(),
            local_only_,
            profiling_,
-           use_fp32_);
+           use_fp32_,
+           use_half_);
     std::ifstream();
     std::cout << "===== config =====" << std::endl;
     std::ifstream f(cfg);
@@ -130,7 +133,13 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
   std::shared_ptr<gko::LinOp> linop;
   if (local_only_) {
     auto local_matrix = matrix->get_local_matrix();
-    if (use_fp32_) {
+    half_rhs_ = gko::Dense<gko::half>::create(exec);
+    half_x_ = gko::Dense<gko::half>::create(exec);
+    if (use_half_) {
+      auto matrix_half = gko::share(gko::matrix::Csr<gko::half, int>::create(exec));
+      matrix_half->copy_from(local_matrix.get());
+      linop = matrix_half;
+    } else if (use_fp32_) {
       auto matrix_float = gko::share(gko::matrix::Csr<float, int>::create(exec));
       matrix_float->copy_from(local_matrix.get());
       linop = matrix_float;
@@ -140,7 +149,14 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
       linop = matrix_double;
     }
   } else {
-    if (use_fp32_) {
+    half_rhs_ = gko::experimental::distributed::Vector<gko::half>::create(exec, comm_);
+    half_x_ = gko::experimental::distributed::Vector<gko::half>::create(exec, comm_);
+    if (use_half_) {
+      auto matrix_half =
+          gko::share(gko::experimental::distributed::Matrix<gko::half, int, IndexType>::create(exec, comm_));
+      matrix_half->copy_from(matrix.get());
+      linop = matrix_half;
+    } else if (use_fp32_) {
       auto matrix_float =
           gko::share(gko::experimental::distributed::Matrix<float, int, IndexType>::create(exec, comm_));
       matrix_float->copy_from(matrix.get());
@@ -156,11 +172,17 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
     auto config = gko::ext::config::parse_json_file(cfg);
 
     gko::config::registry reg;
-    auto td = use_fp32_ ? gko::config::make_type_descriptor<float, int>()
-                        : gko::config::make_type_descriptor<double, int>();
+    auto td = use_half_ ? gko::config::make_type_descriptor<gko::half, int>()
+                        : (use_fp32_ ? gko::config::make_type_descriptor<float, int>()
+                                     : gko::config::make_type_descriptor<double, int>());
     solver_ = gko::share(gko::config::parse(config, reg, td).on(exec)->generate(linop));
   } else {
-    if (use_fp32_) {
+    if (use_half_) {
+      solver_ = gko::share(gko::solver::Cg<gko::half>::build()
+                               .with_criteria(gko::stop::Iteration::build().with_max_iters(100u).on(exec))
+                               .on(exec)
+                               ->generate(linop));
+    } else if (use_fp32_) {
       solver_ = gko::share(gko::solver::Cg<float>::build()
                                .with_criteria(gko::stop::Iteration::build().with_max_iters(100u).on(exec))
                                .on(exec)
@@ -186,7 +208,14 @@ template <typename ValueType> int ginkgoWrapper::solve(void *rhs, void *x)
 
   auto run = [&]() {
     if (local_only_) {
-      solver_->apply(dense_rhs.get(), dense_x.get());
+      if (use_half_) {
+        dense_x->convert_to(half_x_.get());
+        dense_rhs->convert_to(half_rhs_.get());
+        solver_->apply(half_rhs.get(), half_x.get());
+        half_x_->convert_to(dense_x.get());
+      } else {
+        solver_->apply(dense_rhs.get(), dense_x.get());
+      }
     } else {
       auto par_x = gko::experimental::distributed::Vector<ValueType>::create(exec,
                                                                              comm_,
@@ -197,7 +226,14 @@ template <typename ValueType> int ginkgoWrapper::solve(void *rhs, void *x)
                                                                     comm_,
                                                                     gko::dim<2>{num_global_rows_, 1},
                                                                     gko::give(dense_rhs));
-      solver_->apply(par_rhs.get(), par_x.get());
+      if (use_half_) {
+        par_x->convert_to(half_x_.get());
+        par_rhs->convert_to(half_rhs_.get());
+        solver_->apply(half_rhs.get(), half_x.get());
+        half_x_->convert_to(par_x.get());
+      } else {
+        solver_->apply(par_rhs.get(), par_x.get());
+      }
     }
   };
 
@@ -247,6 +283,9 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
                              const std::string &backend,
                              int deviceID,
                              int useFP32,
+                             bool localOnly,
+                             bool profiling,
+                             bool useHalf,
                              const std::string &cfg)
 {
   int rank;
