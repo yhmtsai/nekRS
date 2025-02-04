@@ -133,8 +133,8 @@ ginkgoWrapper::ginkgoWrapper(const int nLocalRows,
   std::shared_ptr<gko::LinOp> linop;
   if (local_only_) {
     auto local_matrix = matrix->get_local_matrix();
-    half_rhs_ = gko::Dense<gko::half>::create(exec);
-    half_x_ = gko::Dense<gko::half>::create(exec);
+    half_rhs_ = gko::matrix::Dense<gko::half>::create(exec);
+    half_x_ = gko::matrix::Dense<gko::half>::create(exec);
     if (use_half_) {
       auto matrix_half = gko::share(gko::matrix::Csr<gko::half, int>::create(exec));
       matrix_half->copy_from(local_matrix.get());
@@ -209,10 +209,10 @@ template <typename ValueType> int ginkgoWrapper::solve(void *rhs, void *x)
   auto run = [&]() {
     if (local_only_) {
       if (use_half_) {
-        dense_x->convert_to(half_x_.get());
-        dense_rhs->convert_to(half_rhs_.get());
-        solver_->apply(half_rhs.get(), half_x.get());
-        half_x_->convert_to(dense_x.get());
+        half_x_->copy_from(dense_x.get());
+        half_rhs_->copy_from(dense_rhs.get());
+        solver_->apply(half_rhs_.get(), half_x_.get());
+        dense_x->copy_from(half_x_.get());
       } else {
         solver_->apply(dense_rhs.get(), dense_x.get());
       }
@@ -227,10 +227,10 @@ template <typename ValueType> int ginkgoWrapper::solve(void *rhs, void *x)
                                                                     gko::dim<2>{num_global_rows_, 1},
                                                                     gko::give(dense_rhs));
       if (use_half_) {
-        par_x->convert_to(half_x_.get());
-        par_rhs->convert_to(half_rhs_.get());
-        solver_->apply(half_rhs.get(), half_x.get());
-        half_x_->convert_to(par_x.get());
+        half_x_->copy_from(par_x.get());
+        half_rhs_->copy_from(par_rhs.get());
+        solver_->apply(half_rhs_.get(), half_x_.get());
+        par_x->copy_from(half_x_.get());
       } else {
         solver_->apply(par_rhs.get(), par_x.get());
       }
