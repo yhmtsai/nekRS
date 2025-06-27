@@ -1,4 +1,5 @@
 # find_package(Ginkgo 1.8.0 QUIET) 
+# using no_public_fsycl branch for intel
 # avoid add_sycl_to_target(TARGET) only in intel.
 # it makes `-fsycl` public such that C files compilation are failed.
 if(NOT Ginkgo_FOUND)
@@ -7,7 +8,7 @@ if(NOT Ginkgo_FOUND)
     FetchContent_Declare(
         Ginkgo
         GIT_REPOSITORY https://github.com/ginkgo-project/ginkgo.git
-        GIT_TAG        no_public_fsycl
+        GIT_TAG        develop
     )
     set(GINKGO_BUILD_CUDA ${OCCA_CUDA_ENABLED} CACHE INTERNAL "")
     set(GINKGO_BUILD_HIP ${OCCA_HIP_ENABLED} CACHE INTERNAL "")
