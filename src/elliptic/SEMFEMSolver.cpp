@@ -143,7 +143,7 @@ SEMFEMSolver_t::SEMFEMSolver_t(elliptic_t *elliptic_)
                                matrix.Ai.data(),
                                matrix.Aj.data(),
                                matrix.Av.data(),
-                               (int)elliptic->allNeumann,
+                               (int)elliptic->nullspace,
                                platform->comm.mpiComm,
                                platform->device.mode(),
                                platform->device.id(),
